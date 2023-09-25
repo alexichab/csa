@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+LANG=C
+
 # Получаем текущую дату
 current_date=$(date)
 
@@ -13,9 +16,9 @@ domain_name=$(hostname)
 cpu_info=$(lscpu)
 cpu_model=$(echo "$cpu_info" | grep "Model name" | awk -F: '{print $2}' | xargs)
 cpu_architecture=$(echo "$cpu_info" | grep "Architecture" | awk -F: '{print $2}' | xargs)
-cpu_max_freq=$(echo "$cpu_info" | grep "Max MHz" | awk -F: '{print $2}' | xargs)
-cpu_curr_freq=$(echo "$cpu_info" | grep "Current MHz" | awk -F: '{print $2}' | xargs)
-cpu_cores=$(echo "$cpu_info" | grep "CPU(s):" | awk -F: '{print $2}' | xargs)
+cpu_max_freq=$(lscpu | grep "CPU max MHz" | awk -F: '{print $2}' | xargs)
+cpu_curr_freq=$(cat /proc/cpuinfo | grep "MHz" ) 
+cpu_cores=$(echo "$cpu_info" | grep "Core(s) per socket" | awk -F: '{print $2}' | xargs)
 cpu_threads=$(echo "$cpu_info" | grep "Thread(s) per core" | awk -F: '{print $2}' | xargs)
 cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
 
@@ -59,7 +62,8 @@ echo "Процессор:"
 echo "Модель: $cpu_model"
 echo "Архитектура: $cpu_architecture"
 echo "Тактовая частота максимальная: $cpu_max_freq MHz"
-echo "Тактовая частота текущая: $cpu_curr_freq MHz"
+echo "Тактовая частота текущая: "
+echo "$cpu_curr_freq"
 echo "Количество ядер: $cpu_cores"
 echo "Количество потоков на одно ядро: $cpu_threads"
 echo "Загрузка процессора: $cpu_usage%"
