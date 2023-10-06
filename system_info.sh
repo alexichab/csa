@@ -3,6 +3,17 @@
 
 LANG=C
 
+function Parameter() {
+	local level=${1:-0}
+
+	while [[ ${level} -gt 0 ]]; do
+		printf "    "
+		((level--))
+	done
+
+	printf "%s\n" "${2:-Unnamed parameter}: ${3:-?}${4}"
+}
+
 # Получаем текущую дату
 current_date=$(date)
 
@@ -89,22 +100,71 @@ echo "SWAP всего: $swap_total"
 echo "SWAP доступно: $swap_available"
 
 # Выводим информацию о сетевых интерфейсах
-echo "Сетевые интерфейсы:"
-echo "Количество сетевых интерфейсов: $num_interfaces"
-echo "$network_interfaces" | grep "^[0-9]:" | while read -r line
-do
-  interface_name=$(echo "$line" | awk '{print $2}' | rev | cut -c 2- | rev)
-  interface_mac=$(ip link show "$interface_name" | awk '/ether/ {print $2}')
-  interface_ip=$(echo "$line" | awk '/inet/ {print $2}')
-  interface_standard=$(ethtool "$interface_name" 2>/dev/null | grep "Supported link modes" | awk -F: '{print $2}' | xargs)
-  interface_max_speed=$(ethtool "$interface_name" 2>/dev/null | grep "Speed" | awk -F: '{print $2}' | xargs)
-  interface_actual_speed=$(ethtool "$interface_name" 2>/dev/null | grep "Duplex" | awk -F: '{print $2}' | xargs)
-  
-  echo "Интерфейс: $interface_name"
-  echo "MAC: $interface_mac"
-  echo "IP: $interface_ip"
-  echo "Стандарт связи: $interface_standard"
-  echo "Максимальная скорость соединения: $interface_max_speed"
-  echo "Фактическая скорость соединения: $interface_actual_speed"
-done
+#echo "Сетевые интерфейсы:"
+#echo "Количество сетевых интерфейсов: $num_interfaces"
+#echo "$network_interfaces" | grep "^[0-9]:" | while read -r line
+#do
+#  interface_name=$(echo "$line" | awk '{print $2}' | rev | cut -c 2- | rev)
+#  interface_mac=$(ip link show "$interface_name" | awk '/ether/ {print $2}')
+#  interface_ip=$(echo "$line" | awk '/inet/ {print $2}')
+#  interface_standard=$(ethtool "$interface_name" 2>/dev/null | grep "Supported link modes" | awk -F: '{print $2}' | xargs)
+#  interface_max_speed=$(ethtool "$interface_name" 2>/dev/null | grep "Speed" | awk -F: '{print $2}' | xargs)
+#  interface_actual_speed=$(ethtool "$interface_name" 2>/dev/null | grep "Duplex" | awk -F: '{print $2}' | xargs)
+#  
+#  echo "Интерфейс: $interface_name"
+#  echo "MAC: $interface_mac"
+#  echo "IP: $interface_ip"
+#  echo "Стандарт связи: $interface_standard"
+#  echo "Максимальная скорость соединения: $interface_max_speed"
+#  echo "Фактическая скорость соединения: $interface_actual_speed"
+#done
 
+function Network() {
+  echo "Сетевые интерфейсы:"
+	Parameter 1 "Количество сетевых интерфейсов:" "$(ip -o link show | wc -l)"
+
+	local has_ip=0
+
+	for interface in /sys/class/net/*; do
+		local name="$(basename "${interface}")"
+
+		Parameter 1 "${name}" " "
+		Parameter 2 MAC "$(cat "${interface}"/address)"
+
+		Parameter 2 IP " "
+		for ip in $(ip addr show "${name}" | grep -E '\<(inet)\>' | awk '{print $2}'); do
+			Parameter 3 IPv4 "${ip}"
+			has_ip=1
+		done
+
+		for ip in $(ip addr show "${name}" | grep -E '\<(inet6)\>' | awk '{print $2}'); do
+			Parameter 3 IPv6 "${ip}"
+			has_ip=1
+		done
+
+		if [ "${name}" != "lo" ] && [ -e "${interface}"/speed ]; then
+			local speed="$(cat "${interface}"/speed 2>/dev/null)"
+			if [[ ${speed} ]] && [[ ${speed} -ge 0 ]]; then
+				Parameter 2 "Nominal speed" "${speed}" " Mbits/sec"
+			fi
+		fi
+
+		if [[ ${has_ip} == 1 ]]; then
+			local speed="$(curl --connect-timeout 3 --max-time 7 --fail-early http://cachefly.cachefly.net/10mb.test --interface "${name}" -w "%{speed_download}" -o /dev/null -s)"
+			speed=$(echo "${speed}" | numfmt --to=iec-i)
+
+			if [[ ${speed} ]]; then
+				Parameter 2 "Actual speed" "${speed}" B/s
+			fi
+		fi
+
+		if [ "${name}" != "lo" ] && [ -e "${interface}"/duplex ]; then
+			local duplex="$(cat "${interface}"/duplex 2>/dev/null)"
+			if [[ ${duplex} ]] && [[ ${duplex} != "unknown" ]]; then
+				Parameter 2 Duplex "${duplex}"
+			fi
+		fi
+	done
+}
+
+Network
