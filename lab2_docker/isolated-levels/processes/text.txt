@@ -1,0 +1,2 @@
+docker build -t processes .
+docker run -it processes

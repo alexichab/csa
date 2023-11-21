@@ -1,0 +1,2 @@
+docker build -t filesystem .
+docker run -it filesystem
